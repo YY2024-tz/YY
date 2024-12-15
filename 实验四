@@ -1,0 +1,66 @@
+### 1. 创建备份表
+
+首先，创建一个与原表结构相同但包含额外时间戳列的备份表。
+
+```sql
+CREATE TABLE abc_backup (
+    id SERIAL PRIMARY KEY,
+    key varchar,
+    value text,
+    -- 其他列与原表相同
+    pg_del_ts TIMESTAMPTZ
+);
+```
+
+### 2. 创建触发器函数
+
+创建一个触发器函数，用于在删除操作发生时将数据复制到备份表。
+
+```sql
+CREATE OR REPLACE FUNCTION backup_data_before_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO abc_backup (key,value,pg_del_ts)
+    VALUES (OLD.key, OLD.value , NOW());
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### 3. 创建触发器
+
+为原表创建一个触发器，调用上面创建的触发器函数。
+
+```sql
+CREATE TRIGGER before_delete_trigger
+BEFORE DELETE ON abc
+FOR EACH ROW EXECUTE FUNCTION backup_data_before_delete();
+```
+
+### 4. 测试触发器
+
+编写一些 SQL 语句来测试触发器是否按预期工作。
+
+```sql
+-- 删除一些数据以触发备份
+DELETE FROM abc WHERE condition;
+
+-- 检查备份表中的数据
+SELECT * FROM abc_backup;
+```
+
+### 5. 关闭和开启备份功能
+
+要关闭备份功能，可以禁用触发器：
+
+```sql
+ALTER TABLE abc DISABLE TRIGGER before_delete_trigger;
+```
+
+要重新开启备份功能，可以启用触发器：
+
+```sql
+ALTER TABLE abc ENABLE TRIGGER before_delete_trigger;
+```
+
+
